@@ -4,21 +4,19 @@ from collections import defaultdict
 import operator
 import argparse
 
-# questions:
-# average score or total wins?
-# draws split points?
-mutate_range = 0.05
-keep_range = 0.2
-
 
 class BlottoLearn(object):
     # Plays repeated tournaments and learns via genetic algorithm
 
-    def __init__(self, blottoGame, num_players):
+    def __init__(self, blottoGame, num_players,
+                 mutate_range=0.1, keep_range=0.5, num_offspring=3):
         self.blottoGame = blottoGame
         self.num_players = num_players
-        self.strat_list = [blottoGame.uniform_strat()
+        self.strat_list = [blottoGame.rand_strat()
                            for i in range(self.num_players)]
+        self.mutate_range = mutate_range
+        self.keep_range = keep_range
+        self.num_offspring = num_offspring
 
     def tour(self):
         # BlottoTournament object for current strategies
@@ -29,22 +27,19 @@ class BlottoLearn(object):
         tour = self.tour()
         tour_size = self.num_players
         strats = tour.sort()
-        strats = strats[:int(keep_range * tour_size)]
+        strats = strats[:int(self.keep_range * tour_size)]
         offspring = [strat.add_noise()
-                     for _ in range(3)
-                     for strat in strats[:int(mutate_range * tour_size)]]
+                     for _ in range(self.num_offspring)
+                     for strat in strats[:int(self.mutate_range * tour_size)]]
         strats += offspring
         to_add = self.num_players - len(strats)
-        strats += [self.blottoGame.uniform_strat() for _ in range(to_add)]
+        strats += [self.blottoGame.rand_strat() for _ in range(to_add)]
         self.strat_list = strats
 
     def learn(self, num_iterations):
         # perform all iterations and publish leaderboard
         (self.iterate() for _ in range(num_iterations))
 
-    def score_board(self):
-        # score board for current strategies list
-        return self.tour().score_board()
 
 
 class BlottoTour(object):
@@ -77,6 +72,10 @@ class BlottoTour(object):
         scores = sorted(score_dict, key=score_dict.get, reverse=True)
         return scores
 
+    def winner(self):
+        # returns tournament winning strategy
+        return self.sort()[0]
+
     def score_board(self):
         # run tournament and show scores in order
         score_dict = self.run_tour()
@@ -86,6 +85,15 @@ class BlottoTour(object):
         score_board = [(strat, score / self.max_score())
                        for strat, score in score_board]
         return score_board
+
+    def str_score_board(self):
+        # string score board for writing to file
+        scores = self.score_board()
+        output_rows = ['Strat: %s Score: %.3f' %
+                       (str(strat.field_array), score)
+                       for strat, score in scores]
+        output = '\n'.join(output_rows)
+        return output
 
 
 class BlottoGame(object):
@@ -157,8 +165,9 @@ class BlottoGame(object):
 
     def multinomial_strat(self):
         # generates multinomial random strategy
-        points_available = self.total_points_available
-        probs = [(i + 1) / points_available for i in range(self.num_fields)]
+        points_available = self.total_points_available()
+        probs = [float(i + 1) / points_available
+                 for i in range(self.num_fields)]
         field_array = np.random.multinomial(self.num_soldiers, probs)
         return PureStrat(self, field_array=field_array)
 
@@ -260,30 +269,69 @@ class PureStrat(object):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Customise genetic algorithm')
     parser.add_argument('num_iterations', metavar='n_iterations', type=int,
-                        help=('The number of iterations to use in'
+                        help=('The number of iterations to use in '
                               'learning algorithm'))
-    parser.add_argument('num_players', metavar='n_players', type=int,
-                        help=('The number of players to use in'
+    parser.add_argument('-p', '--players', type=int, default=300,
+                        dest='num_players',
+                        help=('The number of players to use in '
                               'round robin tournaments'))
-    parser.add_argument('--num_soldiers', type=int, default=100,
-                        help=('The number of soldiers to use in'
+    parser.add_argument('-s', '--soldiers',
+                        type=int,
+                        default=100,
+                        dest='num_soldiers',
+                        help=('The number of soldiers to use in '
                               'Blotto Game'))
-    parser.add_argument('--num_fields', type=int, default=10,
-                        help=('The number of battlefields to use in'
+    parser.add_argument('-f', '--num_fields', type=int, default=10,
+                        help=('The number of battlefields to use in '
                               'Blotto Game'))
-    parser.add_argument('--uniform', dest='distribution',
-                        default='multinomial',
+    parser.add_argument('-m', '--mutate_range', type=float, default=0.1,
+                        help=('The range of strategies to mutate in '
+                              'each Blotto Learn iteration'))
+    parser.add_argument('-k', '--keep_range', type=float, default=0.5,
+                        help=('The range of strategies to keep in '
+                              'each Blotto Learn iteration'))
+    parser.add_argument('-o', '--num_offspring', type=int, default=3,
+                        help=('Number of offspring in '
+                              'each Blotto Learn iteration'))
+    parser.add_argument('-u', '--uniform', action='store_true',
                         help='Generate random strategies uniformly')
+    parser.add_argument('-b', '--best', action='store_true',
+                        help='Prints best result in best_strats file')
     args = parser.parse_args()
+    if args.uniform:
+        distribution = 'uniform'
+    else:
+        distribution = 'multinomial'
     bg = BlottoGame(num_soldiers=args.num_soldiers,
                     num_fields=args.num_fields,
-                    distribution=args.distribution)
-    bl = BlottoLearn(bg, num_players=args.num_players)
+                    distribution=distribution)
+    bl = BlottoLearn(bg,
+                     num_players=args.num_players,
+                     mutate_range=args.mutate_range,
+                     keep_range=args.keep_range,
+                     num_offspring=args.num_offspring)
     bl.learn(num_iterations=args.num_iterations)
-    with open('scores.txt', 'w') as f:
-        scores = bl.score_board()
-        output_rows = ['Strat: %s Score: %.3f' %
-                       (str(strat.field_array), score)
-                       for strat, score in scores]
-        output = '\n'.join(output_rows)
-        f.write(output)
+    with open('scores_most_recent.txt', 'w') as f:
+        f.write(bl.tour().str_score_board())
+    with open('best_strats_detailed.txt', 'a') as f:
+        details = 'Strat: %s' % str(bl.tour().winner().field_array)
+        details += ' Score: %.3f' % bl.tour().score_board()[0][1]
+        details += ' Iterations: %d \n' % args.num_iterations
+        f.write(details)
+    with open('best_strats.txt', 'a') as f:
+        f.write(' '.join([str(soldiers)
+                          for soldiers in bl.tour().winner().field_array]))
+        f.write('\n')
+    print "New strategy had a win rate of %.3f" % bl.tour().score_board()[0][1]
+    if args.best:
+        with open('best_strats.txt', 'r') as f:
+            strat_list = [np.array([int(soldiers)
+                                    for soldiers in line.split(' ')])
+                          for line in f.read().splitlines()]
+        strat_list = [PureStrat(bg, field_array=array) for array in strat_list]
+        num_players = len(strat_list)
+        bt = BlottoTour(bg, num_players,  strat_list)
+        print('The best strategy so far is:\n %s'
+              % str(bt.winner().field_array))
+        with open('leaderboard_all_time.txt', 'w') as f:
+            f.write(bt.str_score_board())
