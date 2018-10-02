@@ -97,13 +97,12 @@ class BlottoTour(object):
 class BlottoGame(object):
     # A heterogeneous Blotto game in which the nth field has n points available
 
-    def __init__(self, num_soldiers, num_fields, distribution='multinomial'):
+    def __init__(self, num_soldiers, num_fields, ):
         self.num_soldiers = num_soldiers
         self.num_fields = num_fields
         self.num_zeros = self.num_soldiers
         self.num_ones = self.num_fields - 1
         self.num_digits = self.num_zeros + self.num_ones
-        self.distribution = distribution
 
     def total_points_available(self):
         # sum of points over all the fields
@@ -161,22 +160,10 @@ class BlottoGame(object):
         binary_full_array = self.position_to_full_array(binary_position_array)
         return PureStrat(self, binary_full_array=binary_full_array)
 
-    def multinomial_strat(self):
-        # generates multinomial random strategy
-        points_available = self.total_points_available()
-        probs = [float(i + 1) / points_available
-                 for i in range(self.num_fields)]
-        field_array = np.random.multinomial(self.num_soldiers, probs)
-        return PureStrat(self, field_array=field_array)
-
     def rand_strat(self):
         # generate random strategy
-        if self.distribution == 'uniform':
-            return self.uniform_strat()
-        elif self.distribution == 'multinomial':
-            return self.multinomial_strat()
-        else:
-            raise AttributeError('bad distribution')
+        uniform_field = self.uniform_strat().field_array
+        return PureStrat(self, field_array=np.sort(uniform_field))
 
     def read_strats_from_file(self, path):
         # read in strateegies from a file
@@ -321,18 +308,11 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--num_offspring', type=int, default=3,
                         help=('Number of offspring in '
                               'each Blotto Learn iteration'))
-    parser.add_argument('-u', '--uniform', action='store_true',
-                        help='Generate random strategies uniformly')
     parser.add_argument('-b', '--best', action='store_true',
                         help='Prints best result in best_strats file')
     args = parser.parse_args()
-    if args.uniform:
-        distribution = 'uniform'
-    else:
-        distribution = 'multinomial'
     bg = BlottoGame(num_soldiers=args.num_soldiers,
-                    num_fields=args.num_fields,
-                    distribution=distribution)
+                    num_fields=args.num_fields)
     bl = BlottoLearn(bg,
                      num_players=args.num_players,
                      mutate_range=args.mutate_range,
