@@ -211,6 +211,8 @@ class PureStrat(object):
         self.binary_full_array = binary_full_array
         self.binary_position_array = binary_position_array
         self.field_array = field_array
+        assert np.sum(field_array) == blottoGame.num_soldiers()
+        assert len(field_array) == blottoGame.num_fields()
 
     def add_noise_binary(self):
         # create similar strategy based on binary string
