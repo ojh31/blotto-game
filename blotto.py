@@ -12,8 +12,7 @@ class BlottoLearn(object):
                  mutate_range=0.1, keep_range=0.5, num_offspring=3):
         self.blottoGame = blottoGame
         self.num_players = num_players
-        self.strat_list = [blottoGame.rand_strat()
-                           for i in range(self.num_players)]
+        self.strat_list = blottoGame.read_strats_from_file('seed_strats.txt')
         self.mutate_range = mutate_range
         self.keep_range = keep_range
         self.num_offspring = num_offspring
@@ -32,8 +31,6 @@ class BlottoLearn(object):
                      for _ in range(self.num_offspring)
                      for strat in strats[:int(self.mutate_range * tour_size)]]
         strats += offspring
-        to_add = self.num_players - len(strats)
-        strats += [self.blottoGame.rand_strat() for _ in range(to_add)]
         self.strat_list = strats
 
     def learn(self, num_iterations):
@@ -41,12 +38,13 @@ class BlottoLearn(object):
         (self.iterate() for _ in range(num_iterations))
 
 
-
 class BlottoTour(object):
     # A Blotto round-robin tournament
 
     def __init__(self, blottoGame, num_players, strat_list):
-        assert num_players == len(strat_list)
+        to_add = self.num_players - len(strat_list)
+        assert to_add >= 0
+        strat_list += [self.blottoGame.rand_strat() for _ in range(to_add)]
         self.blottoGame = blottoGame
         self.num_players = num_players
         self.strat_list = strat_list
@@ -180,6 +178,16 @@ class BlottoGame(object):
         else:
             raise AttributeError('bad distribution')
 
+    def read_strats_from_file(self, path):
+        # read in strateegies from a file
+        with open(path, 'r') as f:
+            strat_list = [np.array([int(soldiers)
+                                    for soldiers in line.split(' ')])
+                          for line in f.read().splitlines()]
+        strat_list = [PureStrat(self, field_array=array)
+                      for array in strat_list]
+        return strat_list
+
 
 class PureStrat(object):
     # A pure strategy for a game of heterogeneous Blotto
@@ -217,15 +225,35 @@ class PureStrat(object):
         self.binary_position_array = binary_position_array
         self.field_array = field_array
 
-    def add_noise(self):
+    def add_noise_binary(self):
         # create similar strategy based on binary string
         binary_full_array = self.binary_full_array.copy()
         (ones,) = np.where(binary_full_array == 1)
-        rem_loc = np.random.choice(ones)
-        binary_full_array = np.delete(binary_full_array, rem_loc)
+        del_loc = np.random.choice(ones)
+        binary_full_array = np.delete(binary_full_array, del_loc)
         add_loc = np.random.choice(self.blottoGame.num_digits)
         binary_full_array = np.insert(binary_full_array, add_loc, 1)
         return PureStrat(self.blottoGame, binary_full_array=binary_full_array)
+
+    def add_noise_field(self):
+        # create a similar strategy based on field array
+        field_array = self.field_array.copy()
+        (non_empty_fields,) = np.where(field_array > 0)
+        del_loc = np.random.choice(non_empty_fields)
+        add_loc = np.random.choice(self.blottoGame.num_fields)
+        field_array[del_loc] -= 1
+        field_array[add_loc] += 1
+        return PureStrat(self.blottoGame, field_array=field_array)
+
+    def add_noise(self):
+        #  chooses 1 of the 2 noise options
+        choice = np.random.choice(np.arange(2))
+        if choice == 0:
+            return self.add_noise_binary()
+        elif choice == 1:
+            return self.add_noise_field()
+        else:
+            raise Exception('failed to select noise type')
 
     def get_offspring(self, num_kids):
         # gets a random list of related strategies
@@ -271,7 +299,7 @@ if __name__ == "__main__":
     parser.add_argument('num_iterations', metavar='n_iterations', type=int,
                         help=('The number of iterations to use in '
                               'learning algorithm'))
-    parser.add_argument('-p', '--players', type=int, default=300,
+    parser.add_argument('-p', '--players', type=int, default=50,
                         dest='num_players',
                         help=('The number of players to use in '
                               'round robin tournaments'))
@@ -324,11 +352,7 @@ if __name__ == "__main__":
         f.write('\n')
     print "New strategy had a win rate of %.3f" % bl.tour().score_board()[0][1]
     if args.best:
-        with open('best_strats.txt', 'r') as f:
-            strat_list = [np.array([int(soldiers)
-                                    for soldiers in line.split(' ')])
-                          for line in f.read().splitlines()]
-        strat_list = [PureStrat(bg, field_array=array) for array in strat_list]
+        strat_list = bg.read_strats_from_file('best_strats.txt')
         num_players = len(strat_list)
         bt = BlottoTour(bg, num_players,  strat_list)
         print('The best strategy so far is:\n %s'
