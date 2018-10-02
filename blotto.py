@@ -220,7 +220,8 @@ class PureStrat(object):
         binary_full_array = np.delete(binary_full_array, del_loc)
         add_loc = np.random.choice(self.blottoGame.num_digits)
         binary_full_array = np.insert(binary_full_array, add_loc, 1)
-        return PureStrat(self.blottoGame, binary_full_array=binary_full_array)
+        return PureStrat(self.blottoGame,
+                         binary_full_array=binary_full_array).sort()
 
     def add_noise_field(self):
         # create a similar strategy based on field array
@@ -230,7 +231,7 @@ class PureStrat(object):
         add_loc = np.random.choice(self.blottoGame.num_fields)
         field_array[del_loc] -= 1
         field_array[add_loc] += 1
-        return PureStrat(self.blottoGame, field_array=field_array)
+        return PureStrat(self.blottoGame, field_array=field_array).sort()
 
     def add_noise(self):
         #  chooses 1 of the 2 noise options
@@ -246,9 +247,18 @@ class PureStrat(object):
         # gets a random list of related strategies
         return [self.add_noise() for i in range(num_kids)]
 
+    def sort(self):
+        # sort field array to force non-decreasing
+        field_array = self.field_array
+        return PureStrat(self.blottoGame, field_array=np.sort(field_array))
+
     def __mul__(self, other):
         # overload * operator to face off between 2 strats in the same game
         assert self.blottoGame == other.blottoGame
+        self_inc = self.field_array == np.sort(self.field_array)
+        other_inc = other.field_array == np.sort(other.field_array)
+        assert self_inc.all()
+        assert other_inc.all()
         flag_points = np.arange(self.blottoGame.num_fields) + 1
         wins = self.field_array > other.field_array
         draws = self.field_array == other.field_array
