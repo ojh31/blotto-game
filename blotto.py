@@ -325,11 +325,18 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--num_offspring', type=int, default=3,
                         help=('Number of offspring in '
                               'each Blotto Learn iteration'))
+    parser.add_argument('-u', '--uniform', action='store_true',
+-                        help='Generate random strategies uniformly')
     parser.add_argument('-b', '--best', action='store_true',
                         help='Prints best result in best_strats file')
     args = parser.parse_args()
+    if args.uniform:
+        distribution = 'uniform'
+    else:
+        distribution = 'multinomial'
     bg = BlottoGame(num_soldiers=args.num_soldiers,
-                    num_fields=args.num_fields)
+                    num_fields=args.num_fields,
+                    distribution=distribution)
     bl = BlottoLearn(bg,
                      num_players=args.num_players,
                      mutate_range=args.mutate_range,
