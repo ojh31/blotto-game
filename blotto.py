@@ -35,16 +35,17 @@ class BlottoLearn(object):
 
     def learn(self, num_iterations):
         # perform all iterations and publish leaderboard
-        (self.iterate() for _ in range(num_iterations))
+        for _ in range(num_iterations):
+            self.iterate()
 
 
 class BlottoTour(object):
     # A Blotto round-robin tournament
 
     def __init__(self, blottoGame, num_players, strat_list):
-        to_add = self.num_players - len(strat_list)
+        to_add = num_players - len(strat_list)
         assert to_add >= 0
-        strat_list += [self.blottoGame.rand_strat() for _ in range(to_add)]
+        strat_list += [blottoGame.rand_strat() for _ in range(to_add)]
         self.blottoGame = blottoGame
         self.num_players = num_players
         self.strat_list = strat_list
@@ -97,7 +98,7 @@ class BlottoTour(object):
 class BlottoGame(object):
     # A heterogeneous Blotto game in which the nth field has n points available
 
-    def __init__(self, num_soldiers, num_fields, ):
+    def __init__(self, num_soldiers, num_fields):
         self.num_soldiers = num_soldiers
         self.num_fields = num_fields
         self.num_zeros = self.num_soldiers
@@ -211,8 +212,8 @@ class PureStrat(object):
         self.binary_full_array = binary_full_array
         self.binary_position_array = binary_position_array
         self.field_array = field_array
-        assert np.sum(field_array) == blottoGame.num_soldiers()
-        assert len(field_array) == blottoGame.num_fields()
+        assert np.sum(field_array) == blottoGame.num_soldiers
+        assert len(field_array) == blottoGame.num_fields
 
     def add_noise_binary(self):
         # create similar strategy based on binary string
